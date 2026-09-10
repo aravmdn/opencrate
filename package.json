@@ -1,7 +1,14 @@
 {
   "name": "opencrate",
   "version": "0.1.0",
+  "description": "Find artist-approved music downloads and match playlists against an open catalog.",
   "private": true,
+  "license": "MIT",
+  "author": "Arav Madan",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aravmdn/opencrate.git"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
