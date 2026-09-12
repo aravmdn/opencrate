@@ -1,12 +1,5 @@
 import { cookies } from "next/headers";
-import { mapSpotifyItems, parseSpotifyPlaylistId } from "@/lib/spotify";
-import type { PlaylistTrack } from "@/lib/types";
-
-type PlaylistResponse = {
-  items?: Parameters<typeof mapSpotifyItems>[0];
-  next?: string | null;
-  error?: { message?: string };
-};
+import { fetchSpotifyPlaylist, parseSpotifyPlaylistId, SpotifyImportError } from "@/lib/spotify";
 
 export async function GET(request: Request) {
   const playlistUrl = new URL(request.url).searchParams.get("url") || "";
@@ -19,26 +12,14 @@ export async function GET(request: Request) {
     return Response.json({ error: "Connect Spotify before importing.", needsAuth: true }, { status: 401 });
   }
 
-  const tracks: PlaylistTrack[] = [];
-  let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${id}/items?limit=50&market=from_token`;
-
-  while (nextUrl && tracks.length < 100) {
-    const response = await fetch(nextUrl, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(12_000),
-    });
-    const data = (await response.json()) as PlaylistResponse;
-    if (!response.ok) {
-      if (response.status === 401) store.delete("opencrate_spotify_access");
-      const message = response.status === 403
-        ? "Spotify only allows imports for playlists you own or collaborate on."
-        : data.error?.message || "Spotify import failed.";
-      return Response.json({ error: message, needsAuth: response.status === 401 }, { status: response.status });
-    }
-    tracks.push(...mapSpotifyItems(data.items || []));
-    nextUrl = data.next || null;
+  try {
+    return Response.json(await fetchSpotifyPlaylist(id, token));
+  } catch (error) {
+    const status = error instanceof SpotifyImportError ? error.status : 502;
+    if (status === 401) store.delete("opencrate_spotify_access");
+    return Response.json({
+      error: error instanceof SpotifyImportError ? error.message : "Spotify is unavailable. Please try again.",
+      needsAuth: status === 401,
+    }, { status });
   }
-
-  return Response.json({ playlistId: id, tracks: tracks.slice(0, 100) });
 }

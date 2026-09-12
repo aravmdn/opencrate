@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { CatalogTrack, PlaylistTrack, TrackMatch } from "@/lib/types";
 
@@ -42,11 +41,10 @@ function parseTextTracks(value: string): PlaylistTrack[] {
     const artist = artistParts.join(" - ").trim();
     if (!title?.trim() || !artist) return null;
     return { id: `text-${index}`, title: title.trim(), artist, album: "Pasted list", artwork: "", spotifyUrl: "" };
-  }).filter((track): track is PlaylistTrack => Boolean(track)).slice(0, 50);
+  }).filter((track): track is PlaylistTrack => Boolean(track)).slice(0, 100);
 }
 
 export function MusicFinder({ catalogConfigured, spotifyConfigured }: Props) {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<CatalogTrack[]>([]);
@@ -106,16 +104,24 @@ export function MusicFinder({ catalogConfigured, spotifyConfigured }: Props) {
   }
 
   async function findMatches(tracks: PlaylistTrack[]) {
-    setImportStatus(`Searching the open catalog for ${tracks.length} tracks…`);
-    const response = await fetch("/api/catalog/match", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tracks }),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Matching failed.");
-    setMatches(data.matches || []);
-    const found = (data.matches as TrackMatch[]).filter((item) => item.match).length;
+    if (!tracks.length) {
+      setImportStatus("This list has no supported music tracks to match.");
+      return;
+    }
+    const allMatches: TrackMatch[] = [];
+    for (let offset = 0; offset < tracks.length; offset += 5) {
+      setImportStatus(`Matching tracks ${offset + 1}–${Math.min(offset + 5, tracks.length)} of ${tracks.length}…`);
+      const response = await fetch("/api/catalog/match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tracks: tracks.slice(offset, offset + 5) }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Matching failed.");
+      allMatches.push(...data.matches);
+      setMatches([...allMatches]);
+    }
+    const found = allMatches.filter((item) => item.match).length;
     setImportStatus(`Found ${found} artist-approved match${found === 1 ? "" : "es"} for ${tracks.length} tracks.`);
   }
 
@@ -128,7 +134,7 @@ export function MusicFinder({ catalogConfigured, spotifyConfigured }: Props) {
         setImportStatus("Spotify OAuth is not configured on this instance. Use the text import below or add credentials.");
         return;
       }
-      router.push("/api/spotify/login");
+      window.location.assign(new URL("/api/spotify/login", window.location.origin).href);
       return;
     }
 
@@ -140,11 +146,12 @@ export function MusicFinder({ catalogConfigured, spotifyConfigured }: Props) {
       const data = await response.json();
       if (data.needsAuth) {
         setSpotifyConnected(false);
-        router.push("/api/spotify/login");
+        window.location.assign(new URL("/api/spotify/login", window.location.origin).href);
         return;
       }
       if (!response.ok) throw new Error(data.error || "Playlist import failed.");
       await findMatches(data.tracks || []);
+      if (data.truncated) setImportStatus((status) => `${status} Only the first 100 playlist entries were imported.`);
     } catch (error) {
       setImportStatus(error instanceof Error ? error.message : "Playlist import failed.");
     } finally {
@@ -172,19 +179,18 @@ export function MusicFinder({ catalogConfigured, spotifyConfigured }: Props) {
 
   function playTrack(track: CatalogTrack) {
     if (nowPlaying?.id === track.id && audioRef.current) {
-      if (audioRef.current.paused) audioRef.current.play(); else audioRef.current.pause();
+      if (audioRef.current.paused) audioRef.current.play().catch(() => setIsPlaying(false)); else audioRef.current.pause();
       return;
     }
     setNowPlaying(track);
   }
 
   function recordDownload(track: CatalogTrack) {
+    if (!track.downloadAllowed) return;
     const next = new Set(downloaded).add(track.id);
     setDownloaded(next);
     localStorage.setItem("opencrate_downloads", JSON.stringify([...next]));
   }
-
-  const downloadedCount = downloaded.size;
 
   return (
     <div className="app-shell">
@@ -196,7 +202,7 @@ export function MusicFinder({ catalogConfigured, spotifyConfigured }: Props) {
         <nav className="nav" aria-label="Main navigation">
           <a className="active" href="#discover"><Icon name="spark"/> Discover</a>
           <a href="#playlist"><Icon name="link"/> Playlist import</a>
-          <a href="#library"><Icon name="download"/> Downloads <span className="nav-count">{downloadedCount}</span></a>
+          <a href="#library"><Icon name="music"/> About OpenCrate</a>
         </nav>
         <div className="sidebar-note">
           <span className="live-dot"/> OPEN SOURCE
@@ -283,7 +289,7 @@ export function MusicFinder({ catalogConfigured, spotifyConfigured }: Props) {
         <footer><a className="brand footer-brand" href="#top"><span className="brand-mark"><span/><span/><span/></span><span>OPEN<br/><b>CRATE</b></span></a><p>Built for the long tail of sound.</p><div><a href="https://developer.jamendo.com/v3.0" target="_blank" rel="noreferrer">API</a><a href="https://github.com/aravmdn/opencrate#readme" target="_blank" rel="noreferrer">Docs</a><a href="https://github.com/aravmdn/opencrate/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a></div></footer>
       </main>
 
-      {nowPlaying && <div className="player"><button className="player-play" onClick={() => playTrack(nowPlaying)} aria-label={isPlaying ? "Pause" : "Play"}><Icon name={isPlaying ? "pause" : "play"}/></button><Artwork track={nowPlaying}/><div className="player-copy"><b>{nowPlaying.title}</b><span>{nowPlaying.artist}</span></div><div className="player-wave" aria-hidden="true">{Array.from({ length: 38 }).map((_, index) => <i key={index} style={{ height: `${8 + ((index * 13) % 22)}px` }}/>)}</div><a className="player-download" href={`/api/catalog/download?id=${nowPlaying.id}`} onClick={() => recordDownload(nowPlaying)}><Icon name="download"/> DOWNLOAD</a><audio ref={audioRef} src={nowPlaying.streamUrl} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)}/></div>}
+      {nowPlaying && <div className="player"><button className="player-play" onClick={() => playTrack(nowPlaying)} aria-label={isPlaying ? "Pause" : "Play"}><Icon name={isPlaying ? "pause" : "play"}/></button><Artwork track={nowPlaying}/><div className="player-copy"><b>{nowPlaying.title}</b><span>{nowPlaying.artist}</span></div><div className="player-wave" aria-hidden="true">{Array.from({ length: 38 }).map((_, index) => <i key={index} style={{ height: `${8 + ((index * 13) % 22)}px` }}/>)}</div>{nowPlaying.downloadAllowed && <a className="player-download" href={`/api/catalog/download?id=${nowPlaying.id}`} target="_blank" rel="noreferrer" onClick={() => recordDownload(nowPlaying)}><Icon name="download"/> DOWNLOAD</a>}<audio ref={audioRef} src={nowPlaying.streamUrl} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => setIsPlaying(false)}/></div>}
     </div>
   );
 }
@@ -293,5 +299,24 @@ function Artwork({ track }: { track: CatalogTrack }) {
 }
 
 function TrackRow({ track, index, active, downloaded, onPlay, onDownload, source }: { track: CatalogTrack; index: number; active: boolean; downloaded: boolean; onPlay: (track: CatalogTrack) => void; onDownload: (track: CatalogTrack) => void; source?: PlaylistTrack }) {
-  return <article className="track-row"><span className="track-index">{String(index).padStart(2, "0")}</span><button className={`artwork-button ${active ? "playing" : ""}`} onClick={() => onPlay(track)} aria-label={`${active ? "Pause" : "Play"} ${track.title}`}><Artwork track={track}/><span className="play-overlay"><Icon name={active ? "pause" : "play"}/></span></button><div className="track-copy"><h3>{track.title}</h3><p>{track.artist} <span>·</span> {track.album}</p>{source && <small>Matched from “{source.title}” by {source.artist}</small>}</div><div className="license-pill"><span/><a href={track.licenseUrl || track.sourceUrl} target="_blank" rel="noreferrer">{track.licenseUrl ? "CC LICENSE" : "SOURCE"}</a></div><span className="track-time">{formatTime(track.duration)}</span><a className={`download-button ${downloaded ? "done" : ""}`} href={`/api/catalog/download?id=${track.id}`} onClick={() => onDownload(track)} aria-label={`Download ${track.title}`}><Icon name={downloaded ? "check" : "download"}/><span>{downloaded ? "SAVED" : "MP3"}</span></a></article>;
+  return (
+    <article className="track-row">
+      <span className="track-index">{String(index).padStart(2, "0")}</span>
+      <button className={`artwork-button ${active ? "playing" : ""}`} disabled={!track.streamUrl} onClick={() => onPlay(track)} aria-label={`${active ? "Pause" : "Play"} ${track.title}`}>
+        <Artwork track={track}/><span className="play-overlay"><Icon name={active ? "pause" : "play"}/></span>
+      </button>
+      <div className="track-copy">
+        <h3><a href={track.sourceUrl} target="_blank" rel="noreferrer">{track.title}</a></h3>
+        <p>{track.artist} <span>·</span> {track.album}</p>
+        {source && <small>{source.spotifyUrl ? <a href={source.spotifyUrl} target="_blank" rel="noreferrer"><Icon name="spotify" size={14}/> {source.title} — {source.artist} on Spotify ↗</a> : `Matched from “${source.title}” by ${source.artist}`}</small>}
+      </div>
+      <div className="license-pill"><span/><a href={track.licenseUrl || track.sourceUrl} target="_blank" rel="noreferrer">{track.licenseUrl ? "CC LICENSE" : "SOURCE"}</a></div>
+      <span className="track-time">{formatTime(track.duration)}</span>
+      {track.downloadAllowed ? (
+        <a className={`download-button ${downloaded ? "done" : ""}`} href={`/api/catalog/download?id=${track.id}`} target="_blank" rel="noreferrer" onClick={() => onDownload(track)} aria-label={`Download ${track.title}`} title="Opens the provider’s download; completion is managed by your browser">
+          <Icon name={downloaded ? "check" : "download"}/><span>{downloaded ? "OPENED" : "MP3"}</span>
+        </a>
+      ) : <span className="track-time">STREAM ONLY</span>}
+    </article>
+  );
 }

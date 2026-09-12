@@ -10,10 +10,10 @@
 - Preview tracks before downloading
 - Download artist-approved MP3s through Jamendo's official file endpoint
 - Display the Creative Commons license or source link with every result
-- Import up to 100 tracks from a Spotify playlist you own or collaborate on
+- Import the first 100 entries from a Spotify playlist you own or collaborate on, skipping unavailable tracks and episodes
 - Paste a plain-text track list when Spotify access is unavailable
 - Match conservatively: normalized exact title plus artist, never a fuzzy guess
-- Track saved items locally in the browser; no database or account required
+- Remember opened download links locally in the browser; download completion is handled by your browser
 - Work across desktop and mobile with keyboard and reduced-motion support
 
 ## Stack
@@ -78,6 +78,8 @@ Spotify URL or text list
 
 OpenCrate prefers a false negative over returning the wrong recording. It compares a normalized exact title and primary artist, then filters out every result where the artist has disabled downloads.
 
+The interface matches imported tracks in batches of five and retains partial results if a later batch fails. Text import accepts up to 100 lines in `Song title — Artist` format. A public Spotify link alone does not guarantee API access: see [Spotify's playlist access restrictions](https://developer.spotify.com/documentation/web-api/reference/get-playlists-items).
+
 ## Environment variables
 
 | Variable | Required | Purpose |
@@ -93,14 +95,17 @@ Never commit `.env.local`. All `.env*` files except `.env.example` are ignored.
 - Use HTTPS in production and register the production callback URL as `{origin}/api/spotify/callback`.
 - Add rate limiting at the edge before exposing a popular public instance.
 - Provider terms and API behavior can change. Review both providers' policies before production deployment.
-- The in-memory UI stores download history only in `localStorage`; it is not synced.
+- The UI stores opened download IDs only in `localStorage`; it cannot confirm a file was saved and is not synced.
 
 ## Development
 
 ```bash
+npm test
 npm run lint
 npm run build
 ```
+
+The provider regression tests use mocked HTTP responses and need no credentials. Real Spotify OAuth, live catalog search, and audio downloads require your own provider credentials; they have not been verified against live accounts in this repository's initial setup.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a new audio source. Integrations must expose explicit download authorization or a compatible license. Stream ripping and DRM bypasses are out of scope.
 

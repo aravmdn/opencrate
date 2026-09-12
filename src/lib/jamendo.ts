@@ -37,7 +37,7 @@ export function mapJamendoTrack(track: JamendoTrack): CatalogTrack {
     artwork: track.image || track.album_image || "",
     duration: track.duration || 0,
     streamUrl: track.audio || "",
-    downloadAllowed: Boolean(track.audiodownload_allowed && track.audiodownload),
+    downloadAllowed: track.audiodownload_allowed === true && Boolean(track.audiodownload),
     licenseUrl: track.license_ccurl || "",
     sourceUrl: track.shareurl || "https://www.jamendo.com",
   };
@@ -84,7 +84,8 @@ export async function findCatalogMatch(title: string, artist: string): Promise<C
   const normalizedTitle = normalize(title);
   const normalizedArtist = normalize(artist.split(",")[0]);
   return downloadable.find((track) =>
-    normalize(track.title) === normalizedTitle && normalize(track.artist).includes(normalizedArtist),
+    normalizedTitle && normalizedArtist &&
+    normalize(track.title) === normalizedTitle && normalize(track.artist) === normalizedArtist,
   ) || null;
 }
 
@@ -95,6 +96,5 @@ export async function getDownloadableTrack(id: string): Promise<CatalogTrack | n
 }
 
 function normalize(value: string): string {
-  return value.toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  return value.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
-

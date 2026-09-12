@@ -11,6 +11,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  if (!body || !Array.isArray(body.tracks) || body.tracks.length > MAX_TRACKS) {
+    return Response.json({ error: "Supply between 1 and 50 tracks per request." }, { status: 400 });
+  }
+
   const tracks = Array.isArray(body.tracks)
     ? body.tracks.filter((track): track is PlaylistTrack =>
       typeof track?.title === "string" && typeof track?.artist === "string" &&
