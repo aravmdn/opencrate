@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest an improvement or a new rights-aware music source.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like OpenCrate to do?
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: New audio source? Link its download permission or license terms.
+      description: OpenCrate only integrates sources that expose explicit download permission or a compatible license. Stream ripping and DRM workarounds are out of scope.

@@ -1,0 +1,35 @@
+name: Bug report
+description: Something in OpenCrate does not work as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Search for "…"
+        2. Click …
+    validations:
+      required: true
+  - type: checkboxes
+    id: features
+    attributes:
+      label: Which optional features are configured?
+      options:
+        - label: Spotify import (SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET)
+        - label: Jev matching (TYPESAFE_API_KEY)
+  - type: input
+    id: environment
+    attributes:
+      label: Browser, OS, and assistive technology (if any)
+      placeholder: Firefox 131 on macOS with VoiceOver
+  - type: markdown
+    attributes:
+      value: Please never paste API keys, client secrets, or Spotify tokens into an issue.
