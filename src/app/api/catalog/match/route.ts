@@ -1,10 +1,35 @@
-import { findCatalogMatch } from "@/lib/jamendo";
+import { CatalogNotConfiguredError } from "@/lib/jamendo";
+import { findCatalogMatch } from "@/lib/matching";
 import type { PlaylistTrack, TrackMatch } from "@/lib/types";
 
 const MAX_TRACKS = 50;
+const CONCURRENCY = 5;
+
+function text(value: unknown, max: number): string {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+// Rebuild each track from known fields so arbitrary client data is never echoed back.
+function sanitize(input: unknown): PlaylistTrack | null {
+  if (!input || typeof input !== "object") return null;
+  const track = input as Record<string, unknown>;
+  const title = text(track.title, 160);
+  const artist = text(track.artist, 160);
+  if (!title || !artist) return null;
+  const spotifyUrl = text(track.spotifyUrl, 200);
+  const artwork = text(track.artwork, 500);
+  return {
+    id: text(track.id, 64) || `${title}-${artist}`,
+    title,
+    artist,
+    album: text(track.album, 160),
+    artwork: artwork.startsWith("https://") ? artwork : "",
+    spotifyUrl: spotifyUrl.startsWith("https://open.spotify.com/") ? spotifyUrl : "",
+  };
+}
 
 export async function POST(request: Request) {
-  let body: { tracks?: PlaylistTrack[] };
+  let body: { tracks?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -12,35 +37,23 @@ export async function POST(request: Request) {
   }
 
   if (!body || !Array.isArray(body.tracks) || body.tracks.length > MAX_TRACKS) {
-    return Response.json({ error: "Supply between 1 and 50 tracks per request." }, { status: 400 });
+    return Response.json({ error: `Supply between 1 and ${MAX_TRACKS} tracks per request.` }, { status: 400 });
   }
 
-  const tracks = Array.isArray(body.tracks)
-    ? body.tracks.filter((track): track is PlaylistTrack =>
-      typeof track?.title === "string" && typeof track?.artist === "string" &&
-      track.title.trim().length > 0 && track.artist.trim().length > 0,
-    ).slice(0, MAX_TRACKS).map((track) => ({
-      ...track,
-      title: track.title.trim().slice(0, 160),
-      artist: track.artist.trim().slice(0, 160),
-    }))
-    : [];
+  const tracks = body.tracks.map(sanitize).filter((track) => track !== null);
   if (!tracks.length) return Response.json({ error: "No tracks supplied." }, { status: 400 });
 
   try {
     const matches: TrackMatch[] = [];
-    for (let index = 0; index < tracks.length; index += 5) {
-      const batch = tracks.slice(index, index + 5);
-      matches.push(...await Promise.all(batch.map(async (source) => ({
-        source,
-        match: await findCatalogMatch(source.title, source.artist),
-      }))));
+    for (let index = 0; index < tracks.length; index += CONCURRENCY) {
+      const batch = tracks.slice(index, index + CONCURRENCY);
+      matches.push(...await Promise.all(batch.map(async (source) => ({ source, ...await findCatalogMatch(source) }))));
     }
     return Response.json({ matches });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Matching failed." },
-      { status: error instanceof Error && error.message.includes("not configured") ? 503 : 502 },
+      { status: error instanceof CatalogNotConfiguredError ? 503 : 502 },
     );
   }
 }

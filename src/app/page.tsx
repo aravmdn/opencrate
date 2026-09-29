@@ -7,6 +7,7 @@ export default function Home() {
     <MusicFinder
       catalogConfigured={Boolean(process.env.JAMENDO_CLIENT_ID)}
       spotifyConfigured={Boolean(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET)}
+      jevConfigured={Boolean(process.env.TYPESAFE_API_KEY)}
     />
   );
 }

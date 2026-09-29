@@ -25,22 +25,27 @@ export async function GET(request: Request) {
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
   if (!clientId || !clientSecret) return Response.redirect(`${origin}/?spotify=not_configured`, 303);
 
-  const tokenResponse = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: `${origin}/api/spotify/callback`,
-    }),
-    cache: "no-store",
-  });
-
-  const tokens = (await tokenResponse.json()) as TokenResponse;
-  if (!tokenResponse.ok || !tokens.access_token) {
+  let tokens: TokenResponse;
+  try {
+    const tokenResponse = await fetch("https://accounts.spotify.com/api/token", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: `${origin}/api/spotify/callback`,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
+    });
+    tokens = tokenResponse.ok ? (await tokenResponse.json()) as TokenResponse : {};
+  } catch {
+    tokens = {};
+  }
+  if (!tokens.access_token) {
     return Response.redirect(`${origin}/?spotify=token_error`, 303);
   }
 

@@ -1,22 +1,43 @@
 {
   "name": "opencrate",
   "version": "0.1.0",
-  "description": "Find artist-approved music downloads and match playlists against an open catalog.",
+  "description": "Find artist-approved music downloads and match playlists against an open catalog, with optional Jev-powered matching.",
   "private": true,
   "license": "MIT",
   "author": "Arav Madan",
+  "homepage": "https://github.com/aravmdn/opencrate#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/aravmdn/opencrate.git"
   },
+  "bugs": {
+    "url": "https://github.com/aravmdn/opencrate/issues"
+  },
+  "keywords": [
+    "music",
+    "creative-commons",
+    "jamendo",
+    "spotify",
+    "playlist",
+    "nextjs",
+    "jev",
+    "typesafe",
+    "accessibility"
+  ],
+  "engines": {
+    "node": ">=20.9"
+  },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 127.0.0.1",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {
+    "@typesafe-ai/sdk": "^0.6.0",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"
